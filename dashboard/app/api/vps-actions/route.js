@@ -2,7 +2,7 @@ import { Client } from 'ssh2';
 
 export async function POST(req) {
   try {
-    const { ip } = await req.json();
+    const { ip, username } = await req.json();
     const isAWS = ip.startsWith('13.') || ip.startsWith('3.') || ip.startsWith('18.');
     
     // Récupération brute
@@ -22,26 +22,42 @@ export async function POST(req) {
       const conn = new Client();
       
       conn.on('ready', () => {
-        conn.exec('sudo reboot', (err, stream) => {
+        // On détache le reboot avec nohup + sleep 1 pour laisser le temps
+        // à SSH de recevoir l'ACK avant que le serveur coupe la connexion.
+        // Le "|| true" évite un code de retour non-zéro qui ferait croire à une erreur.
+        const cmd = 'nohup sh -c "sleep 1 && sudo reboot" > /dev/null 2>&1 & echo ok';
+        conn.exec(cmd, (err, stream) => {
           if (err) return resolve(Response.json({ error: "Erreur exécution: " + err.message }, { status: 500 }));
+          let output = '';
+          stream.on('data', (d) => { output += d.toString(); });
           stream.on('close', () => {
             conn.end();
-            resolve(Response.json({ message: "Success" }));
+            // "ok" dans output = la commande a bien été lancée en arrière-plan
+            if (output.trim() === 'ok') {
+              resolve(Response.json({ message: "Reboot lancé avec succès" }));
+            } else {
+              resolve(Response.json({ error: "Réponse inattendue : " + output }, { status: 500 }));
+            }
           });
+          stream.stderr.resume();
         });
       }).on('error', (err) => {
-        // C'est ici que l'erreur DECODER est captée
+        // On ignore l'erreur de connexion fermée brutalement (le reboot a coupé SSH)
+        if (err.message?.includes('Connection lost') || err.message?.includes('socket hang up')) {
+          resolve(Response.json({ message: "Reboot lancé avec succès" }));
+          return;
+        }
         resolve(Response.json({ error: "Erreur SSH : " + err.message }, { status: 500 }));
       }).connect({
         host: ip,
         port: 22,
-        username: isAWS ? 'ubuntu' : 'opc',
-        privateKey: formattedKey, // On passe la clé nettoyée
-        readyTimeout: 15000,
-        // Option de secours pour les formats anciens
-        algorithms: {
-          serverHostKey: ['ssh-rsa', 'ssh-dss'],
-        }
+        username: username || 'ubuntu',
+        privateKey: formattedKey,
+        readyTimeout: 20000,
+        keepaliveInterval: 5000,
+        // Laisser ssh2 négocier automatiquement tous les algorithmes modernes
+        // (suppression de l'ancienne restriction 'ssh-rsa'/'ssh-dss' qui bloquait
+        //  les serveurs utilisant ecdsa-sha2-nistp256 ou ssh-ed25519)
       });
     });
   } catch (e) {

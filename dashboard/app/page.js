@@ -43,7 +43,7 @@ const handleAction = async (actionType) => {
     const res = await fetch('/api/vps-actions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodeId: node.id, action: actionType, ip: node.ip_address })
+      body: JSON.stringify({ nodeId: node.id, action: actionType, ip: node.ip_address, username: node.ssh_user || 'root' })
     });
     
     const data = await res.json();
@@ -106,7 +106,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newNode, setNewNode] = useState({ name: '', ip_address: '' });
+  const [newNode, setNewNode] = useState({ name: '', ip_address: '', ssh_user: 'ubuntu' });
 
   const fetchNodes = async () => {
     try {
@@ -137,7 +137,7 @@ export default function Dashboard() {
       const { error } = await supabase.from('vps_nodes').insert([newNode]);
       if (error) throw error;
       setIsModalOpen(false);
-      setNewNode({ name: '', ip_address: '' });
+      setNewNode({ name: '', ip_address: '', ssh_user: 'ubuntu' });
       fetchNodes();
     } catch (err) { alert("Error: " + err.message); }
   };
@@ -213,6 +213,7 @@ export default function Dashboard() {
               <div>
                 <label className="text-[10px] font-black text-gray-500 uppercase block mb-1">Target IPv4 Address</label>
                 <input required value={newNode.ip_address} onChange={e => setNewNode({...newNode, ip_address: e.target.value})} className="w-full bg-[#111] border border-gray-800 rounded-lg p-3 text-sm focus:border-blue-500 outline-none text-white transition-colors" placeholder="141.253.115.198" />
+                <input required value={newNode.ssh_user} onChange={e => setNewNode({...newNode, ssh_user: e.target.value})} className="w-full bg-[#111] border border-gray-800 rounded-lg p-3 text-sm focus:border-blue-500 outline-none text-white transition-colors" placeholder="Utilisateur SSH (ex: ubuntu, opc, root)" />
               </div>
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all mt-4 active:scale-95">Establish Connection</button>
             </form>
