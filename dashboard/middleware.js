@@ -17,7 +17,7 @@ export async function middleware(request) {
 
   try {
     // 3. Vérification du token
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback_secret_temp');
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "une_cle_temporaire_pour_eviter_le_crash");
     await jwtVerify(token, secret);
     return NextResponse.next();
   } catch (error) {
