@@ -27,6 +27,7 @@ const ResourceBar = ({ label, value, color, extraLabel }) => (
 );
 
 const StatCard = ({ node }) => {
+  // On récupère les métriques les plus récentes
   const stats = node.vps_metrics?.[0] || { 
     cpu_usage: 0, 
     ram_usage: 0, 
@@ -39,12 +40,12 @@ const StatCard = ({ node }) => {
   const now = new Date();
   const isOnline = lastSeen && (now - lastSeen) < 60000;
 
-  // FALLBACK : On utilise les valeurs de la DB si elles existent, sinon tes valeurs par défaut
-  const totalDisk = stats.disk_total || 50; 
-  const usedDisk = ((stats.disk_usage || 0) * totalDisk / 100).toFixed(1);
+  // CALCULS 100% DYNAMIQUES (Fin du hardcode 24GB/50GB)
+  const totalDisk = stats.disk_total || 0; 
+  const usedDisk = totalDisk > 0 ? ((stats.disk_usage || 0) * totalDisk / 100).toFixed(1) : 0;
   
-  const totalRam = stats.ram_total || 24; 
-  const usedRam = ((stats.ram_usage || 0) * totalRam / 100).toFixed(2);
+  const totalRam = stats.ram_total || 0; 
+  const usedRam = totalRam > 0 ? ((stats.ram_usage || 0) * totalRam / 100).toFixed(2) : 0;
 
   const handleAction = async (actionType) => {
     const confirmAction = confirm(`Voulez-vous vraiment exécuter : ${actionType} sur ${node.name} ?`);
@@ -85,13 +86,13 @@ const StatCard = ({ node }) => {
           label="RAM" 
           value={isOnline ? stats.ram_usage : 0} 
           color="bg-blue-500" 
-          extraLabel={isOnline ? `${usedRam} / ${totalRam} GB` : null}
+          extraLabel={isOnline && totalRam > 0 ? `${usedRam} / ${totalRam} GB` : null}
         />
         <ResourceBar 
           label="DISK" 
           value={isOnline ? stats.disk_usage : 0} 
           color="bg-purple-500" 
-          extraLabel={isOnline ? `${usedDisk} / ${totalDisk} GB` : null}
+          extraLabel={isOnline && totalDisk > 0 ? `${usedDisk} / ${totalDisk} GB` : null}
         />
       </div>
 
