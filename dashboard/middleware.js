@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-export async function proxy(req) {
+export async function middleware(req) {
   const token = req.cookies.get("admin_token")?.value;
   const isLoginPage = req.nextUrl.pathname === "/login";
 
