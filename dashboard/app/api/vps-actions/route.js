@@ -1,53 +1,51 @@
-import { NextResponse } from 'next/server';
-import { NodeSSH } from 'node-ssh';
-import path from 'path';
-import os from 'os';
+import { Client } from 'ssh2';
 
-const ssh = new NodeSSH();
-
-export async function POST(request) {
+export async function POST(req) {
   try {
-    const { nodeId, action, ip } = await request.json();
-
-    // 1. Définition de la commande système selon l'action
-    let command = '';
-    if (action === 'RESTART') command = 'sudo reboot';
-    if (action === 'SHUTDOWN') command = 'sudo poweroff';
-
-    if (!command) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "Action non reconnue" 
-      }, { status: 400 });
-    }
-
-    // 2. Configuration du chemin vers ta clé ed25519
-    // os.homedir() permet de pointer vers /Users/charles-augustinvidelaine sur ton Mac
-    const keyPath = path.join(os.homedir(), '.ssh', 'id_ed25519');
-
-    // 3. Tentative de connexion SSH
-    await ssh.connect({
-      host: ip,
-      username: 'ubuntu', // Vérifie si c'est 'ubuntu' ou 'root' sur ton VPS Oracle
-      privateKeyPath: keyPath
-    });
-
-    // 4. Exécution de la commande
-    await ssh.execCommand(command);
+    const { ip } = await req.json();
+    const isAWS = ip.startsWith('13.') || ip.startsWith('3.') || ip.startsWith('18.');
     
-    // Fermeture propre de la session
-    ssh.dispose(); 
+    // Récupération brute
+    let rawKey = isAWS ? process.env.AWS_SSH_KEY : process.env.ORACLE_SSH_KEY;
 
-    return NextResponse.json({ 
-      success: true, 
-      message: `La commande ${action} a été envoyée avec succès au serveur ${ip}.` 
+    if (!rawKey) return Response.json({ error: "Clé SSH manquante dans le .env" }, { status: 500 });
+
+    // --- NETTOYAGE ULTIME ---
+    // On enlève les guillemets éventuels et on transforme les \n textuels en vrais sauts de ligne
+    let formattedKey = rawKey.trim();
+    if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
+      formattedKey = formattedKey.slice(1, -1);
+    }
+    formattedKey = formattedKey.replace(/\\n/g, '\n');
+
+    return new Promise((resolve) => {
+      const conn = new Client();
+      
+      conn.on('ready', () => {
+        conn.exec('sudo reboot', (err, stream) => {
+          if (err) return resolve(Response.json({ error: "Erreur exécution: " + err.message }, { status: 500 }));
+          stream.on('close', () => {
+            conn.end();
+            resolve(Response.json({ message: "Success" }));
+          });
+        });
+      }).on('error', (err) => {
+        // C'est ici que l'erreur DECODER est captée
+        resolve(Response.json({ error: "Erreur SSH : " + err.message }, { status: 500 }));
+      }).connect({
+        host: ip,
+        port: 22,
+        username: isAWS ? 'ubuntu' : 'opc',
+        privateKey: formattedKey, // On passe la clé nettoyée
+        readyTimeout: 15000,
+        // Option de secours pour les formats anciens
+        algorithms: {
+          serverHostKey: ['ssh-rsa', 'ssh-dss'],
+        }
+      });
     });
-
-  } catch (error) {
-    console.error("SSH Error:", error);
-    return NextResponse.json({ 
-      success: false, 
-      message: `Erreur SSH : ${error.message}` 
-    }, { status: 500 });
+  } catch (e) {
+    // Si l'API crash, c'est capté ici
+    return Response.json({ error: "Crash API: " + e.message }, { status: 500 });
   }
 }
