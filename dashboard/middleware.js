@@ -1,4 +1,3 @@
-export const runtime = 'experimental-edge'; // Force l'environnement Edge
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
