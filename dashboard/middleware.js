@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
+  console.log(`[Middleware] ${request.method} ${pathname}`);
+
   if (pathname === '/login' || pathname.startsWith('/_next') || pathname === '/favicon.ico' || pathname === '/favicon.png') {
     return NextResponse.next();
   }
