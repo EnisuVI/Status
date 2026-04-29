@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { Settings, RefreshCw, Power, Terminal, Plus, Activity, Cpu, X, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, RefreshCw, Power, Terminal, Plus, Activity, Cpu, X, Trash2, LogOut } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip, XAxis, CartesianGrid, Legend } from 'recharts';
 
@@ -36,28 +36,24 @@ const StatCard = ({ node, onDelete }) => {
   const totalRam = stats.ram_total || 0; 
   const usedRam = totalRam > 0 ? ((stats.ram_usage || 0) * totalRam / 100).toFixed(2) : 0;
 
-const handleAction = async (actionType) => {
-  if (!confirm(`Voulez-vous vraiment exécuter : ${actionType} sur ${node.name} ?`)) return;
-
-  try {
-    const res = await fetch('/api/vps-actions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodeId: node.id, action: actionType, ip: node.ip_address, username: node.ssh_user || 'root' })
-    });
-    
-    const data = await res.json();
-    
-    // ICI ON FIX LE UNDEFINED
-    if (res.ok) {
-      alert(data.message || "Action réussie !");
-    } else {
-      alert("Erreur: " + (data.error || data.message || "Problème serveur interne"));
+  const handleAction = async (actionType) => {
+    if (!confirm(`Voulez-vous vraiment exécuter : ${actionType} sur ${node.name} ?`)) return;
+    try {
+      const res = await fetch('/api/vps-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: node.id, action: actionType, ip: node.ip_address, username: node.ssh_user || 'root' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || "Action réussie !");
+      } else {
+        alert("Erreur: " + (data.error || data.message || "Problème serveur interne"));
+      }
+    } catch (err) {
+      alert("Erreur réseau ou crash API.");
     }
-  } catch (err) {
-    alert("Erreur réseau ou crash API.");
-  }
-};
+  };
 
   return (
     <div className="bg-[#1e1e1e] p-5 rounded-xl border border-gray-800 shadow-lg relative overflow-hidden group">
@@ -106,7 +102,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newNode, setNewNode] = useState({ name: '', ip_address: '', ssh_user: 'ubuntu' });
+  const settingsRef = useRef(null);
+
+  // Ferme le dropdown si on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchNodes = async () => {
     try {
@@ -131,6 +140,11 @@ export default function Dashboard() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  };
+
   const handleRegisterNode = async (e) => {
     e.preventDefault();
     try {
@@ -145,9 +159,7 @@ export default function Dashboard() {
   const handleDeleteNode = async (id, name) => {
     if (!confirm(`🚨 Êtes-vous sûr de vouloir supprimer définitivement le VPS "${name}" ? Toutes les métriques seront effacées.`)) return;
     try {
-      // 1. On supprime d'abord les métriques (contrainte de clé étrangère)
       await supabase.from('vps_metrics').delete().eq('vps_id', id);
-      // 2. On supprime le node
       const { error } = await supabase.from('vps_nodes').delete().eq('id', id);
       if (error) throw error;
       fetchNodes();
@@ -176,11 +188,29 @@ export default function Dashboard() {
             <h1 className="text-xl font-black tracking-[0.15em] text-white uppercase italic">status.enisuvi.cloud</h1>
           </div>
           <div className="flex items-center gap-8 text-right">
-             <div className="border-r border-gray-800 pr-8">
+            <div className="border-r border-gray-800 pr-8">
               <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mb-1">Active Nodes</p>
               <p className="text-2xl font-black text-white leading-none">{nodes.length}</p>
             </div>
-            <Settings className="text-gray-600 hover:text-white cursor-pointer transition-all hover:rotate-90" size={20} />
+
+            {/* Settings dropdown */}
+            <div className="relative" ref={settingsRef}>
+              <Settings
+                className={`cursor-pointer transition-all duration-300 ${settingsOpen ? 'text-white rotate-90' : 'text-gray-600 hover:text-white hover:rotate-90'}`}
+                size={20}
+                onClick={() => setSettingsOpen(!settingsOpen)}
+              />
+              {settingsOpen && (
+                <div className="absolute right-0 top-8 bg-[#1e1e1e] border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50 w-44">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <LogOut size={13} /> Déconnexion
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -193,8 +223,8 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-           <ChartBox title="Processor Load Realtime" icon={<Cpu size={16}/>} data={chartData} nodes={nodes} suffix="_cpu" color="#10b981" />
-           <ChartBox title="Memory Allocation Delta" icon={<Activity size={16}/>} data={chartData} nodes={nodes} suffix="_ram" color="#3b82f6" />
+          <ChartBox title="Processor Load Realtime" icon={<Cpu size={16}/>} data={chartData} nodes={nodes} suffix="_cpu" color="#10b981" />
+          <ChartBox title="Memory Allocation Delta" icon={<Activity size={16}/>} data={chartData} nodes={nodes} suffix="_ram" color="#3b82f6" />
         </div>
       </div>
 
@@ -224,7 +254,6 @@ export default function Dashboard() {
   );
 }
 
-// Petit composant interne pour alléger le Dashboard
 const ChartBox = ({ title, icon, data, nodes, suffix, color }) => (
   <div className="bg-[#111111] p-8 rounded-2xl border border-gray-800 shadow-2xl relative overflow-hidden">
     <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: color + '33' }}></div>
