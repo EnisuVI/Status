@@ -14,6 +14,7 @@ const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 const ResourceBar = ({ label, value, color, extraLabel }) => (
   <div>
     <div className="flex justify-between text-[10px] uppercase tracking-wider text-gray-500 mb-1 font-bold">
+      <title>Status - EnisuVI</title>
       <span>{label}</span>
       <span>
         {extraLabel ? <span className="mr-2 text-gray-400 normal-case font-medium">{extraLabel}</span> : null}

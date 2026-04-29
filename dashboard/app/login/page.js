@@ -25,6 +25,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+      <title>Status - Login</title>
       <div className="bg-[#141414] border border-white/5 p-8 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center gap-2 mb-8">
           <div className="w-3 h-3 bg-[#4ade80] rounded-full animate-pulse" />
