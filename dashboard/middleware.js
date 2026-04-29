@@ -1,37 +1,38 @@
 import { NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
 
 export async function middleware(request) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname === '/login' || pathname.startsWith('/_next') || pathname === '/favicon.ico' || pathname === '/favicon.png') {
+    return NextResponse.next();
+  }
+
+  const token = request.cookies.get('admin_token')?.value;
+  if (!token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Vérification JWT manuelle sans import externe
   try {
-    const token = request.cookies.get('admin_token')?.value;
-    const { pathname } = request.nextUrl;
-
-    // Routes publiques
-    if (pathname === '/login' || pathname.startsWith('/_next') || pathname === '/favicon.ico') {
-      return NextResponse.next();
-    }
-
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-
-    try {
-      const jwtSecret = process.env.JWT_SECRET || "temp_secret_123";
-      const secret = new TextEncoder().encode(jwtSecret);
-      await jwtVerify(token, secret);
-      return NextResponse.next();
-    } catch (e) {
+    const parts = token.split('.');
+    if (parts.length !== 3) throw new Error('invalid');
+    
+    const payload = JSON.parse(atob(parts[1]));
+    
+    if (payload.exp && Date.now() / 1000 > payload.exp) {
       const res = NextResponse.redirect(new URL('/login', request.url));
       res.cookies.delete('admin_token');
       return res;
     }
-  } catch (error) {
-    // Fallback si crash du middleware
-    console.error('Middleware error:', error);
+    
     return NextResponse.next();
+  } catch {
+    const res = NextResponse.redirect(new URL('/login', request.url));
+    res.cookies.delete('admin_token');
+    return res;
   }
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|login).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|favicon.png|login).*)'],
 };
