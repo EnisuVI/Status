@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-
 import { Client } from 'ssh2';
 
 export async function POST(req) {

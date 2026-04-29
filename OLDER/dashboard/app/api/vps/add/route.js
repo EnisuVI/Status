@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-
 import { createClient } from '@supabase/supabase-js';
 import CryptoJS from 'crypto-js';
 
